@@ -66,5 +66,20 @@ class WangyiSpider(scrapy.Spider):
         data = NewsItem()
         data['title'] = response.body[s+len(s_str):e].decode('gb2312').encode('utf-8')
         data['url'] = response.url
-        data['content'] = 'aaaaa'
+        content = response.xpath('////div[@id="endText"]').extract_first()
+        content = self.del_main_text_mark(content)
+        data['content'] = content
         return data
+
+    def del_main_text_mark(self, text):
+        """删除新闻正文无用的标签"""
+        s = text.find('<')
+        while s != -1:
+            s = text.find('<')
+            e = text.find('>', s)
+            text = text.replace(text[s:e+1], '')
+
+        text = text.replace('\n', '')
+        text = text.replace('\r', '')
+        text = text.replace(' ', '')
+        return text
