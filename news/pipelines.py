@@ -8,6 +8,8 @@
 import pymongo
 
 
+#db_info = {"ip":"40.74.129.55", "port":27017, "db_name":"news", 
+#            "collection":"wangyi"}
 db_info = {"ip":"localhost", "port":27017, "db_name":"news", 
             "collection":"wangyi"}
 
@@ -19,7 +21,7 @@ class NewsPipeline(object):
 
     def process_item(self, item, spider):
         self.db[db_info['collection']].insert(dict(item))
-        return item
+        #return item
 
     def close_spider(self, spider):
         self.client.close()
