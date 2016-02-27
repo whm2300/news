@@ -8,14 +8,37 @@ import scrapy
 from scrapy.http.request import Request
 from news.items import NewsItem
 
+import pymongo
+
+crawl_db = pymongo.MongoClient('localhost', 27017)['news']['crawl_url']
+origin_db = pymongo.MongoClient('localhost', 27017)['news']['origin_url']
+
 class AnalyseHtml(object):
     crawl_url = set()  #已经爬取的url
-    url_patter = re.compile(r'/\d{2}/\d{4}/\d+/*')
-    news_date = '150101'
+    url_patter = re.compile(r'/\d{2}/\d{4}/\d+/*')  #新闻类容url正则表达式
+    split_page_url_patter = re.compile(r'_\d{1}.html')  #分页新闻url正则表达式
+    news_date = '160101'
     special_url = ["v.auto.163.com/"]
 
-    def GetAllUrl(self, body):
+    def IsSplitUrl(self, url):
+        if self.split_page_url_patter.search(url):
+            return True
+        return False
+
+    def IsNeedUrl(self, url):
+        """判断提取网页中的url是否符合要求"""
+        if not self.Is163Url(url):  #不是163url
+            return False
+        if url in self.crawl_url:  #已经抓取过
+            return False
+        if self.IsSplitUrl(url):  #是分页url
+            return False
+        return True
+        
+
+    def GetAllUrl(self, response):
         """获取网页中所有url"""
+        body = response.body
         linka_s = 0
         linka_e = 0
         urls = []
@@ -26,15 +49,21 @@ class AnalyseHtml(object):
             url_s = url_a.find('http://')
             url_e = url_a.find('"', url_s)
             url = url_a[url_s:url_e]
-            if not self.Is163Url(url) or url in self.crawl_url:
-                continue
-            self.crawl_url.add(url)
-            urls.append(url)
+            if self.IsNeedUrl(url):
+                self.crawl_url.add(url)
+                urls.append(url)
+        #test
+        test_data = {}
+        test_data['url'] = response.url.decode('gb2312').encode('utf-8')
+        test_data['sub_url'] = []
+        for url in urls:
+            test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
+        origin_db.insert(test_data)
         return urls
 
-    def GetNewsUrl(self, body):
+    def GetNewsUrl(self, response):
         """获取新闻内容url, 该类url需满足一定正则表达式格式。"""
-        urls = self.GetAllUrl(body)
+        urls = self.GetAllUrl(response)
         for url in urls:
             if not self.Is163Url(url) or not self.IsNewsUrl(url):
                 urls.remove(url)
@@ -52,11 +81,12 @@ class AnalyseHtml(object):
     def Is163Url(self, url):
         """检测是否是网易url"""
         #体育#娱乐#财经#汽车#科技#手机#数码#女人#旅游#深圳房产#家居#教育#游戏#健康#彩票#酒香
-        eligible_urls = ["sports.163.com", "ent.163.com", "money.163.com", "auto.163.com", 
-                "tech.163.com", "mobile.163.com", "digi.163.com", "lady.163.com", 
-                "travel.163.com", "sz.house.163.com", "home.163.com", "edu.163.com", 
-                "play.163.com", "jiankang.163.com", "caipiao.163.com", "jiu.163.com", 
-                "news.163.com", ]
+        #eligible_urls = ["sports.163.com", "ent.163.com", "money.163.com", "auto.163.com", 
+        #        "tech.163.com", "mobile.163.com", "digi.163.com", "lady.163.com", 
+        #        "travel.163.com", "sz.house.163.com", "home.163.com", "edu.163.com", 
+        #        "play.163.com", "jiankang.163.com", "caipiao.163.com", "jiu.163.com", 
+        #        "news.163.com", ]
+        eligible_urls = ["news.163.com", ]
         for i in eligible_urls:
             if (url.find(i) != -1):
                 return True
@@ -67,6 +97,7 @@ class WangyiSpider(scrapy.Spider):
     allowed_domains = ["163.com"]
     start_urls = ["http://news.163.com"]
     analyse_html = AnalyseHtml()
+
 
     def make_requests_from_url(self, url):
         #模拟浏览器请求
@@ -85,7 +116,15 @@ class WangyiSpider(scrapy.Spider):
             return 
 
         #提取网页中所有需要的url
-        urls = self.analyse_html.GetAllUrl(response.body)
+        urls = self.analyse_html.GetAllUrl(response)
+        #test
+        test_data = {}
+        test_data['url'] = response.url.decode('gb2312').encode('utf-8')
+        test_data['sub_url'] = []
+        for url in urls:
+            test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
+        crawl_db.insert(test_data)
+
         for url in urls:
             yield Request(url, self.parse_news_page)
 
@@ -103,7 +142,14 @@ class WangyiSpider(scrapy.Spider):
             yield data
 
         #提取网页中其他需要的url
-        urls = self.analyse_html.GetNewsUrl(response.body)
+        urls = self.analyse_html.GetNewsUrl(response)
+        #test
+        test_data = {}
+        test_data['url'] = response.url.decode('gb2312').encode('utf-8')
+        test_data['sub_url'] = []
+        crawl_db.insert(test_data)
+        for url in urls:
+            test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
         for url in urls:
             yield Request(url, self.parse_news_page)
 
