@@ -17,7 +17,7 @@ class AnalyseHtml(object):
     crawl_url = set()  #已经爬取的url
     url_patter = re.compile(r'/\d{2}/\d{4}/\d+/*')  #新闻类容url正则表达式
     split_page_url_patter = re.compile(r'_\d{1}.html')  #分页新闻url正则表达式
-    news_date = '160101'
+    news_date = '150101'
     special_url = ["v.auto.163.com/"]
 
     def IsSplitUrl(self, url):
@@ -64,10 +64,8 @@ class AnalyseHtml(object):
     def GetNewsUrl(self, response):
         """获取新闻内容url, 该类url需满足一定正则表达式格式。"""
         urls = self.GetAllUrl(response)
-        for url in urls:
-            if not self.Is163Url(url) or not self.IsNewsUrl(url):
-                urls.remove(url)
-        return urls
+        new_urls = [url for url in urls if self.Is163Url(url) and self.IsNewsUrl(url)]
+        return new_urls
 
     def IsNewsUrl(self, url):
         """判断url是否符合新闻内容类url"""
@@ -81,12 +79,11 @@ class AnalyseHtml(object):
     def Is163Url(self, url):
         """检测是否是网易url"""
         #体育#娱乐#财经#汽车#科技#手机#数码#女人#旅游#深圳房产#家居#教育#游戏#健康#彩票#酒香
-        #eligible_urls = ["sports.163.com", "ent.163.com", "money.163.com", "auto.163.com", 
-        #        "tech.163.com", "mobile.163.com", "digi.163.com", "lady.163.com", 
-        #        "travel.163.com", "sz.house.163.com", "home.163.com", "edu.163.com", 
-        #        "play.163.com", "jiankang.163.com", "caipiao.163.com", "jiu.163.com", 
-        #        "news.163.com", ]
-        eligible_urls = ["news.163.com", ]
+        eligible_urls = ["sports.163.com", "ent.163.com", "money.163.com", "auto.163.com", 
+                "tech.163.com", "mobile.163.com", "digi.163.com", "lady.163.com", 
+                "travel.163.com", "sz.house.163.com", "home.163.com", "edu.163.com", 
+                "play.163.com", "jiankang.163.com", "caipiao.163.com", "jiu.163.com", 
+                "news.163.com", ]
         for i in eligible_urls:
             if (url.find(i) != -1):
                 return True
@@ -147,9 +144,9 @@ class WangyiSpider(scrapy.Spider):
         test_data = {}
         test_data['url'] = response.url.decode('gb2312').encode('utf-8')
         test_data['sub_url'] = []
-        crawl_db.insert(test_data)
         for url in urls:
             test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
+        crawl_db.insert(test_data)
         for url in urls:
             yield Request(url, self.parse_news_page)
 
