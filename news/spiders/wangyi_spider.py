@@ -16,11 +16,12 @@ origin_db = pymongo.MongoClient('localhost', 27017)['news']['origin_url']
 class AnalyseHtml(object):
     crawl_url = set()  #已经爬取的url
     url_patter = re.compile(r'/\d{2}/\d{4}/\d+/*')  #新闻类容url正则表达式
-    split_page_url_patter = re.compile(r'_\d{1}.html')  #分页新闻url正则表达式
+    split_page_url_patter = re.compile(r'_\d{1,2}.html')  #分页新闻url正则表达式
     news_date = '150101'
     special_url = ["v.auto.163.com/"]
 
     def IsSplitUrl(self, url):
+        """是否是分页新闻url"""
         if self.split_page_url_patter.search(url):
             return True
         return False
@@ -131,15 +132,17 @@ class WangyiSpider(scrapy.Spider):
             self.log("get news fail:" + response.url, logging.ERROR)
             return 
 
-        #如果网页满足新闻页格式，提取新闻内容
+        #提取网页中其他需要的url
+        urls = self.analyse_html.GetNewsUrl(response)
+
+        #如果网页满足新闻页格式，且不含有all新闻页。提取新闻内容
         ##########################
-        if self.analyse_html.IsNewsUrl(response.url):
+        all_url = response.url.replace('.html', '_all.html')
+        if self.analyse_html.IsNewsUrl(response.url) and all_url not in urls:
             data = NewsItem()
             data['url'] = response.url
             yield data
 
-        #提取网页中其他需要的url
-        urls = self.analyse_html.GetNewsUrl(response)
         #test
         test_data = {}
         test_data['url'] = response.url.decode('gb2312').encode('utf-8')
