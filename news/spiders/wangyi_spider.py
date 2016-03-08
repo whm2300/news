@@ -8,11 +8,6 @@ import scrapy
 from scrapy.http.request import Request
 from news.items import NewsItem
 
-import pymongo
-
-crawl_db = pymongo.MongoClient('localhost', 27017)['news']['crawl_url']
-origin_db = pymongo.MongoClient('localhost', 27017)['news']['origin_url']
-
 class AnalyseHtml(object):
     crawl_url = set()  #已经爬取的url
     url_patter = re.compile(r'/\d{2}/\d{4}/\d+/*')  #新闻类容url正则表达式
@@ -53,13 +48,6 @@ class AnalyseHtml(object):
             if self.IsNeedUrl(url):
                 self.crawl_url.add(url)
                 urls.append(url)
-        #test
-        test_data = {}
-        test_data['url'] = response.url.decode('gb2312').encode('utf-8')
-        test_data['sub_url'] = []
-        for url in urls:
-            test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
-        origin_db.insert(test_data)
         return urls
 
     def GetNewsUrl(self, response):
@@ -115,14 +103,6 @@ class WangyiSpider(scrapy.Spider):
 
         #提取网页中所有需要的url
         urls = self.analyse_html.GetAllUrl(response)
-        #test
-        test_data = {}
-        test_data['url'] = response.url.decode('gb2312').encode('utf-8')
-        test_data['sub_url'] = []
-        for url in urls:
-            test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
-        crawl_db.insert(test_data)
-
         for url in urls:
             yield Request(url, self.parse_news_page)
 
@@ -134,47 +114,38 @@ class WangyiSpider(scrapy.Spider):
 
         #提取网页中其他需要的url
         urls = self.analyse_html.GetNewsUrl(response)
-
         #如果网页满足新闻页格式，且不含有all新闻页。提取新闻内容
-        ##########################
         all_url = response.url.replace('.html', '_all.html')
         if self.analyse_html.IsNewsUrl(response.url) and all_url not in urls:
-            data = NewsItem()
-            data['url'] = response.url
+            data = self.get_news_content(response)
             yield data
 
-        #test
-        test_data = {}
-        test_data['url'] = response.url.decode('gb2312').encode('utf-8')
-        test_data['sub_url'] = []
-        for url in urls:
-            test_data['sub_url'].append(url.decode('gb2312').encode('utf-8'))
-        crawl_db.insert(test_data)
         for url in urls:
             yield Request(url, self.parse_news_page)
 
-#        s_str = '<h1 id="h1title" class="ep-h1">'
-#        e_str = '</h1>'
-#        s = response.body.find(s_str)
-#        e = response.body.find(e_str, s)
-#
-#        data = NewsItem()
-#        data['title'] = response.body[s+len(s_str):e].decode('gb2312').encode('utf-8')
-#        data['url'] = response.url
-#        content = response.xpath('////div[@id="endText"]').extract_first()
-#        content = self.del_main_text_mark(content)
-#        data['content'] = content
-#        return data
+    def get_news_content(self, response):
+        s_str = '<h1 id="h1title" class="ep-h1">'
+        e_str = '</h1>'
+        s = response.body.find(s_str)
+        e = response.body.find(e_str, s)
 
-#    def del_main_text_mark(self, text):
-#        """删除新闻正文无用的标签"""
-#        s = text.find('<')
-#        while s != -1:
-#            s = text.find('<')
-#            e = text.find('>', s)
-#            text = text.replace(text[s:e+1], '')
-#
-#        text = text.replace('\n', '')
-#        text = text.replace('\r', '')
-#        text = text.replace(' ', '')
-#        return text
+        data = NewsItem()
+        data['title'] = response.body[s+len(s_str):e].decode('gb2312').encode('utf-8')
+        data['url'] = response.url
+        content = response.xpath('////div[@id="endText"]').extract_first()
+        content = self.del_main_text_mark(content)
+        data['content'] = content
+        return data
+
+    def del_main_text_mark(self, text):
+        """删除新闻正文无用的标签"""
+        s = text.find('<')
+        while s != -1:
+            s = text.find('<')
+            e = text.find('>', s)
+            text = text.replace(text[s:e+1], '')
+
+        text = text.replace('\n', '')
+        text = text.replace('\r', '')
+        text = text.replace(' ', '')
+        return text
